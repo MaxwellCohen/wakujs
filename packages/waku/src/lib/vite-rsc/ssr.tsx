@@ -21,6 +21,7 @@ import {
 
 const createFromReadableStream = <T,>(
   stream: ReadableStream<Uint8Array>,
+  elidedValues?: Map<number, unknown>,
 ): Promise<T> => {
   // DEV: hold the stream ~5s so React's late debug-channel chunks settle before close. https://github.com/wakujs/waku/pull/2154
   return createFromReadableStreamBase<T>(
@@ -31,6 +32,9 @@ const createFromReadableStream = <T,>(
           }),
         )
       : stream,
+    // `elidedRows` is not in plugin-rsc's types yet. Elided rows only hold
+    // static host output, so the live nodes are used as is.
+    (elidedValues && { elidedRows: elidedValues }) as object | undefined,
   );
 };
 
@@ -43,6 +47,7 @@ type RenderHtmlStream = (
     nonce: string | undefined;
     extraScriptContent: string | undefined;
     debugId: string | undefined;
+    elidedValues: Map<number, unknown> | undefined;
     onError: (e: unknown) => string | undefined;
   },
 ) => Promise<{ stream: ReadableStream; status: number | undefined }>;
@@ -72,7 +77,10 @@ export const renderHtmlStream: RenderHtmlStream = async (
     // https://github.com/facebook/react/pull/31799#discussion_r1886166075
     // FIXME unlike the client, this does not adopt the payload, so it keeps
     // its reserved keys and unstable_isImmutableElement reads no etags from it
-    elementsPromise ??= createFromReadableStream<RscElementsPayload>(stream1);
+    elementsPromise ??= createFromReadableStream<RscElementsPayload>(
+      stream1,
+      options.elidedValues,
+    );
     htmlPromise ??= createFromReadableStream<RscHtmlPayload>(rscHtmlStream);
     return (
       <INTERNAL_ServerRoot elementsPromise={elementsPromise}>

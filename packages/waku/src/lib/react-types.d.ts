@@ -42,6 +42,7 @@ declare module 'react-server-dom-webpack/server.edge' {
     temporaryReferences?: TemporaryReferenceSet | undefined;
     onError?: ((error: unknown) => string | undefined) | undefined;
     onPostpone?: ((reason: string) => void) | undefined;
+    onElidedValue?: ((id: number, value: unknown) => void) | undefined;
   };
 
   export function renderToReadableStream(

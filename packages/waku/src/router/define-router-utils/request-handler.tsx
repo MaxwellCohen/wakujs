@@ -335,6 +335,7 @@ export function createRequestHandler({
           const response = await renderHtml(
             await renderRscWithIntent(entries.elements, {
               etags: entries.etags,
+              unstable_htmlFirst: true,
             }),
             <INTERNAL_ServerRouter
               route={{ path: routePath, query, hash: '' }}

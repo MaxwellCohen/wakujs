@@ -158,7 +158,7 @@ describe('define-router action requests', () => {
 
     expect(renderRsc).toHaveBeenCalledWith(
       expect.objectContaining({ [ROUTE_ID]: ['/404', ''] }),
-      { etags: {} },
+      { etags: {}, unstable_htmlFirst: true },
     );
     expect(renderHtml).toHaveBeenCalledWith(
       expect.any(ReadableStream),
@@ -213,7 +213,7 @@ describe('define-router action requests', () => {
       expect.objectContaining({
         'page:/': 'page:after',
       }),
-      { etags: {} },
+      { etags: {}, unstable_htmlFirst: true },
     );
     expect(renderHtml).toHaveBeenCalledWith(
       expect.any(ReadableStream),
@@ -266,7 +266,7 @@ describe('define-router action requests', () => {
     expect(renderPage).toHaveBeenCalledTimes(2);
     expect(renderRsc).toHaveBeenCalledWith(
       expect.objectContaining({ 'page:/form': 'page:after' }),
-      { etags: {} },
+      { etags: {}, unstable_htmlFirst: true },
     );
   });
 
@@ -324,7 +324,7 @@ describe('define-router action requests', () => {
       expect.objectContaining({
         'page:/': 'page:after',
       }),
-      { etags: {} },
+      { etags: {}, unstable_htmlFirst: true },
     );
     expect(renderHtml).toHaveBeenCalledWith(
       expect.any(ReadableStream),

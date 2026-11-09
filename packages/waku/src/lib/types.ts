@@ -14,6 +14,8 @@ export type RenderRsc = (
     value?: unknown;
     etags?: Etags;
     unstable_clientModuleCallback?: (ids: string[]) => void;
+    /** The stream is only for `renderHtml`; React may elide static values from it. */
+    unstable_htmlFirst?: boolean;
   },
 ) => Promise<ReadableStream>;
 

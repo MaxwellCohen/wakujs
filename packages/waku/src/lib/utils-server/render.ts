@@ -13,6 +13,13 @@ const validateRscElementIds = (elements: Record<string, unknown>) => {
   }
 };
 
+// HTML-first Flight: values the RSC stream elides for the browser, handed to
+// in-process SSR through the stream they were elided from.
+const elidedValuesByStream = new WeakMap<
+  ReadableStream,
+  Map<number, unknown>
+>();
+
 export function createRenderUtils({
   temporaryReferences,
   renderToReadableStream,
@@ -65,13 +72,20 @@ export function createRenderUtils({
       if (options?.etags && Object.keys(options.etags).length) {
         data[ETAGS_ID] = options.etags;
       }
-      return renderWithWeakPromises(data, (model) =>
+      const elided = options?.unstable_htmlFirst
+        ? new Map<number, unknown>()
+        : undefined;
+      const stream = renderWithWeakPromises(data, (model) =>
         renderToReadableStream(
           model,
           {
             temporaryReferences,
             onError,
             debugChannel: createDebugChannel?.(),
+            ...(elided && {
+              onElidedValue: (id: number, value: unknown) =>
+                elided.set(id, value),
+            }),
           },
           {
             onClientReference(metadata: {
@@ -84,6 +98,10 @@ export function createRenderUtils({
           },
         ),
       );
+      if (elided) {
+        elidedValuesByStream.set(stream, elided);
+      }
+      return stream;
     },
     async renderHtml(elementsStream, html, options) {
       const { INTERNAL_renderHtmlStream: renderHtmlStream } =
@@ -96,6 +114,7 @@ export function createRenderUtils({
         nonce: options.nonce,
         extraScriptContent: options.unstable_extraScriptContent,
         debugId,
+        elidedValues: elidedValuesByStream.get(elementsStream),
         onError,
       });
       return new Response(htmlResult.stream, {
