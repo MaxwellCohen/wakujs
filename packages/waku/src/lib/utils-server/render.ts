@@ -13,13 +13,6 @@ const validateRscElementIds = (elements: Record<string, unknown>) => {
   }
 };
 
-// HTML-first Flight: values the RSC stream elides for the browser, handed to
-// in-process SSR through the stream they were elided from.
-const elidedValuesByStream = new WeakMap<
-  ReadableStream,
-  Map<number, unknown>
->();
-
 export function createRenderUtils({
   temporaryReferences,
   renderToReadableStream,
@@ -72,9 +65,10 @@ export function createRenderUtils({
       if (options?.etags && Object.keys(options.etags).length) {
         data[ETAGS_ID] = options.etags;
       }
-      const elided = options?.unstable_htmlFirst
-        ? new Map<number, unknown>()
-        : undefined;
+      // enableFlightHtmlFirst: HTML SSR omits callbacks so React's internal
+      // registry feeds in-process createFrom*. RSC-only responses (SPA nav)
+      // must pass onElidedRow: false — otherwise auto-elision leaves the
+      // browser with stubs and no HTML to adopt.
       const stream = renderWithWeakPromises(data, (model) =>
         renderToReadableStream(
           model,
@@ -82,10 +76,9 @@ export function createRenderUtils({
             temporaryReferences,
             onError,
             debugChannel: createDebugChannel?.(),
-            ...(elided && {
-              onElidedValue: (id: number, value: unknown) =>
-                elided.set(id, value),
-            }),
+            ...(options?.unstable_htmlFirst
+              ? {}
+              : { onElidedRow: false }),
           },
           {
             onClientReference(metadata: {
@@ -98,23 +91,22 @@ export function createRenderUtils({
           },
         ),
       );
-      if (elided) {
-        elidedValuesByStream.set(stream, elided);
-      }
       return stream;
     },
     async renderHtml(elementsStream, html, options) {
       const { INTERNAL_renderHtmlStream: renderHtmlStream } =
         await loadSsrEntryModule();
 
-      const rscHtmlStream = renderToReadableStream(html, { onError });
+      const rscHtmlStream = renderToReadableStream(html, {
+        onError,
+        onElidedRow: false,
+      });
       const htmlResult = await renderHtmlStream(elementsStream, rscHtmlStream, {
         rscPath: options.rscPath,
         formState: options.formState as never,
         nonce: options.nonce,
         extraScriptContent: options.unstable_extraScriptContent,
         debugId,
-        elidedValues: elidedValuesByStream.get(elementsStream),
         onError,
       });
       return new Response(htmlResult.stream, {

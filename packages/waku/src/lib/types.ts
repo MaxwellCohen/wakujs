@@ -14,7 +14,11 @@ export type RenderRsc = (
     value?: unknown;
     etags?: Etags;
     unstable_clientModuleCallback?: (ids: string[]) => void;
-    /** The stream is only for `renderHtml`; React may elide static values from it. */
+    /**
+     * When true (HTML document render), omit elision callbacks so React's
+     * in-process registry feeds SSR. When false/omitted (RSC navigation),
+     * React is told `onElidedRow: false` so the browser gets a full payload.
+     */
     unstable_htmlFirst?: boolean;
   },
 ) => Promise<ReadableStream>;
