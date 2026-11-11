@@ -126,6 +126,7 @@ const decodeRsc = (
   temporaryReferences: ReturnType<typeof createTemporaryReferenceSet>,
   debugChannel:
     ReturnType<typeof setupDebugChannel>['debugChannel'] | undefined,
+  initial: boolean,
 ): Promise<Elements> =>
   Promise.resolve(
     createFromFetch<Elements>(checkStatus(responsePromise), {
@@ -133,8 +134,27 @@ const decodeRsc = (
         callServerRsc(serverFunctionId, args),
       debugChannel,
       temporaryReferences,
+      // The initial payload can leave static content out when React was built
+      // with static host elision (React adopts it from the HTML). If that
+      // content turns out to be needed on the client (a modal or client-only
+      // wrapper mounting later, a boundary client-rendering after an error),
+      // refetch the full payload. Later fetches are always full payloads.
+      ...(initial ? { onElidedContentMissing: recoverElidedContent } : {}),
     }),
   );
+
+// Set by the mounted Root. Refetches the initial payload in full, replacing
+// the elided stubs in it. A request that arrives before Root mounts (a
+// hydration failure) is remembered and run on mount.
+let elidedRecovery: (() => void) | undefined;
+let elidedRecoveryRequested = false;
+const recoverElidedContent = () => {
+  if (elidedRecovery) {
+    elidedRecovery();
+  } else {
+    elidedRecoveryRequested = true;
+  }
+};
 
 const buildIdMismatch = Symbol('waku.build-id-mismatch');
 
@@ -207,6 +227,7 @@ const fetchRscElements = (
       responsePromise,
       temporaryReferences,
       debug?.debugChannel,
+      !!initial,
     ).then((data) => checkBuildId(data, options.onBuildIdMismatch));
     return elements.then((data) =>
       type === 'call'
@@ -422,21 +443,30 @@ export function Root({
   useLayoutEffect(() => {
     releaseInitialRscEntry(...initialInput, initialElements);
     const unregisterStore = registerRootStore(store);
+    const refetchInitial = () => {
+      const data = store.fetchRsc(...initialInput);
+      store.setElements((prev) =>
+        Promise.all([prev, data]).then(([prev, incoming]) =>
+          combineElements(incoming, prev, {
+            filter: (key) => typeof key === 'symbol' && !(key in incoming),
+          }),
+        ),
+      );
+    };
     const unregisterReload = import.meta.hot
-      ? registerRootReload(store, () => {
-          const data = store.fetchRsc(...initialInput);
-          store.setElements((prev) =>
-            Promise.all([prev, data]).then(([prev, incoming]) =>
-              combineElements(incoming, prev, {
-                filter: (key) => typeof key === 'symbol' && !(key in incoming),
-              }),
-            ),
-          );
-        })
+      ? registerRootReload(store, refetchInitial)
       : undefined;
+    elidedRecovery = refetchInitial;
+    if (elidedRecoveryRequested) {
+      elidedRecoveryRequested = false;
+      refetchInitial();
+    }
     return () => {
       unregisterStore();
       unregisterReload?.();
+      if (elidedRecovery === refetchInitial) {
+        elidedRecovery = undefined;
+      }
     };
   }, [initialElements, initialInput, store]);
   useEffect(() => {

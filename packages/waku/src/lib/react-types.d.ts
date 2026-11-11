@@ -87,6 +87,7 @@ declare module 'react-server-dom-webpack/client' {
       { writable?: WritableStream; readable?: ReadableStream } | undefined;
     findSourceMapURL?: (filename: string, environmentName: string) => string;
     temporaryReferences?: TemporaryReferenceSet;
+    onElidedContentMissing?: () => void;
   };
 
   export function createFromFetch<T>(
