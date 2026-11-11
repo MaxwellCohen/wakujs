@@ -23,7 +23,7 @@ const createFromReadableStream = <T,>(
   stream: ReadableStream<Uint8Array>,
 ): Promise<T> => {
   // DEV: hold the stream ~5s so React's late debug-channel chunks settle before close. https://github.com/wakujs/waku/pull/2154
-  // enableFlightHtmlFirst: omit elidedRows — React claims the in-process
+  // enableFlightStaticHostElision: omit elidedHostRows — React claims the in-process
   // registry from the stream's `:Q` row (zero framework opt-in).
   return createFromReadableStreamBase<T>(
     import.meta.env.DEV

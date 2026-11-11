@@ -65,7 +65,7 @@ export function createRenderUtils({
       if (options?.etags && Object.keys(options.etags).length) {
         data[ETAGS_ID] = options.etags;
       }
-      // enableFlightHtmlFirst: only the Flight render that feeds HTML SSR opts
+      // enableFlightStaticHostElision: only the Flight render that feeds HTML SSR opts
       // in (React's internal registry feeds in-process createFrom*). RSC-only
       // responses (SPA nav) do not, so they carry full content.
       const stream = renderWithWeakPromises(data, (model) =>
@@ -75,7 +75,7 @@ export function createRenderUtils({
             temporaryReferences,
             onError,
             debugChannel: createDebugChannel?.(),
-            ...(options?.unstable_htmlFirst ? { onElidedRow: true } : {}),
+            ...(options?.unstable_htmlFirst ? { elideStaticHosts: true } : {}),
           },
           {
             onClientReference(metadata: {

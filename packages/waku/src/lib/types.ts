@@ -15,7 +15,7 @@ export type RenderRsc = (
     etags?: Etags;
     unstable_clientModuleCallback?: (ids: string[]) => void;
     /**
-     * When true (HTML document render), opt in to elision with `onElidedRow: true`
+     * When true (HTML document render), opt in to elision with `elideStaticHosts: true`
      * so React's in-process registry feeds SSR. When false/omitted (RSC
      * navigation) nothing is elided, so the browser gets a full payload.
      */
