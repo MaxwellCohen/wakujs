@@ -65,10 +65,9 @@ export function createRenderUtils({
       if (options?.etags && Object.keys(options.etags).length) {
         data[ETAGS_ID] = options.etags;
       }
-      // enableFlightHtmlFirst: HTML SSR omits callbacks so React's internal
-      // registry feeds in-process createFrom*. RSC-only responses (SPA nav)
-      // must pass onElidedRow: false — otherwise auto-elision leaves the
-      // browser with stubs and no HTML to adopt.
+      // enableFlightHtmlFirst: only the Flight render that feeds HTML SSR opts
+      // in (React's internal registry feeds in-process createFrom*). RSC-only
+      // responses (SPA nav) do not, so they carry full content.
       const stream = renderWithWeakPromises(data, (model) =>
         renderToReadableStream(
           model,
@@ -76,9 +75,7 @@ export function createRenderUtils({
             temporaryReferences,
             onError,
             debugChannel: createDebugChannel?.(),
-            ...(options?.unstable_htmlFirst
-              ? {}
-              : { onElidedRow: false }),
+            ...(options?.unstable_htmlFirst ? { onElidedRow: true } : {}),
           },
           {
             onClientReference(metadata: {
@@ -97,10 +94,7 @@ export function createRenderUtils({
       const { INTERNAL_renderHtmlStream: renderHtmlStream } =
         await loadSsrEntryModule();
 
-      const rscHtmlStream = renderToReadableStream(html, {
-        onError,
-        onElidedRow: false,
-      });
+      const rscHtmlStream = renderToReadableStream(html, { onError });
       const htmlResult = await renderHtmlStream(elementsStream, rscHtmlStream, {
         rscPath: options.rscPath,
         formState: options.formState as never,
