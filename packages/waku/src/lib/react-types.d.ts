@@ -42,7 +42,7 @@ declare module 'react-server-dom-webpack/server.edge' {
     temporaryReferences?: TemporaryReferenceSet | undefined;
     onError?: ((error: unknown) => string | undefined) | undefined;
     onPostpone?: ((reason: string) => void) | undefined;
-    elideStaticHosts?:
+    htmlFirst?:
       | boolean
       | {
           onRow?: (id: number, json: string) => void;
@@ -87,7 +87,7 @@ declare module 'react-server-dom-webpack/client' {
       { writable?: WritableStream; readable?: ReadableStream } | undefined;
     findSourceMapURL?: (filename: string, environmentName: string) => string;
     temporaryReferences?: TemporaryReferenceSet;
-    onElidedContentMissing?: () => void;
+    onMissingHTML?: () => void;
   };
 
   export function createFromFetch<T>(

@@ -135,24 +135,24 @@ const decodeRsc = (
       debugChannel,
       temporaryReferences,
       // The initial payload can leave static content out when React was built
-      // with static host elision (React adopts it from the HTML). If that
+      // with HTML-first Flight (React adopts it from the HTML). If that
       // content turns out to be needed on the client (a modal or client-only
       // wrapper mounting later, a boundary client-rendering after an error),
       // refetch the full payload. Later fetches are always full payloads.
-      ...(initial ? { onElidedContentMissing: recoverElidedContent } : {}),
+      ...(initial ? { onMissingHTML: recoverMissingHTML } : {}),
     }),
   );
 
 // Set by the mounted Root. Refetches the initial payload in full, replacing
-// the elided stubs in it. A request that arrives before Root mounts (a
+// the stubs in it. A request that arrives before Root mounts (a
 // hydration failure) is remembered and run on mount.
-let elidedRecovery: (() => void) | undefined;
-let elidedRecoveryRequested = false;
-const recoverElidedContent = () => {
-  if (elidedRecovery) {
-    elidedRecovery();
+let missingHTMLRecovery: (() => void) | undefined;
+let missingHTMLRecoveryRequested = false;
+const recoverMissingHTML = () => {
+  if (missingHTMLRecovery) {
+    missingHTMLRecovery();
   } else {
-    elidedRecoveryRequested = true;
+    missingHTMLRecoveryRequested = true;
   }
 };
 
@@ -456,16 +456,16 @@ export function Root({
     const unregisterReload = import.meta.hot
       ? registerRootReload(store, refetchInitial)
       : undefined;
-    elidedRecovery = refetchInitial;
-    if (elidedRecoveryRequested) {
-      elidedRecoveryRequested = false;
+    missingHTMLRecovery = refetchInitial;
+    if (missingHTMLRecoveryRequested) {
+      missingHTMLRecoveryRequested = false;
       refetchInitial();
     }
     return () => {
       unregisterStore();
       unregisterReload?.();
-      if (elidedRecovery === refetchInitial) {
-        elidedRecovery = undefined;
+      if (missingHTMLRecovery === refetchInitial) {
+        missingHTMLRecovery = undefined;
       }
     };
   }, [initialElements, initialInput, store]);
