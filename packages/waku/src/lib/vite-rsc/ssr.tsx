@@ -1,8 +1,13 @@
 import { type ReactNode, use } from 'react';
 import {
   createFromReadableStream as createFromReadableStreamBase,
+  createServerConsumerManifest,
   getClientEntryUrl,
 } from '@vitejs/plugin-rsc/ssr';
+import {
+  createFromTee,
+  createTee,
+} from '@vitejs/plugin-rsc/vendor/react-server-dom/client.edge';
 import type { ReactFormState } from 'react-dom/client';
 import { renderToReadableStream } from 'react-dom/server.edge';
 import { injectRSCPayload } from 'rsc-html-stream/server';
@@ -23,8 +28,6 @@ const createFromReadableStream = <T,>(
   stream: ReadableStream<Uint8Array>,
 ): Promise<T> => {
   // DEV: hold the stream ~5s so React's late debug-channel chunks settle before close. https://github.com/wakujs/waku/pull/2154
-  // enableFlightHTMLFirst: omit htmlFirstRows — React claims the in-process
-  // registry from the stream's `:Q` row (zero framework opt-in).
   return createFromReadableStreamBase<T>(
     import.meta.env.DEV
       ? stream.pipeThrough(
@@ -36,6 +39,11 @@ const createFromReadableStream = <T,>(
   );
 };
 
+// enableFlightHTMLFirst: the tee is created before the Flight render so the
+// server can hand it the real rows while the stream carries the stubbed ones.
+export const createHtmlFirstTee = (): unknown =>
+  createTee(createServerConsumerManifest());
+
 type RenderHtmlStream = (
   rscStream: ReadableStream<Uint8Array>,
   rscHtmlStream: ReadableStream<Uint8Array>,
@@ -46,6 +54,7 @@ type RenderHtmlStream = (
     extraScriptContent: string | undefined;
     debugId: string | undefined;
     onError: (e: unknown) => string | undefined;
+    tee?: unknown;
   },
 ) => Promise<{ stream: ReadableStream; status: number | undefined }>;
 
@@ -62,7 +71,10 @@ export const renderHtmlStream: RenderHtmlStream = async (
   rscHtmlStream,
   options,
 ) => {
-  const [stream1, stream2] = rscStream.tee();
+  // With a tee, SSR reads values from it and only the inlined bytes use the stream.
+  const [stream1, stream2] = options.tee
+    ? [undefined, rscStream]
+    : rscStream.tee();
 
   let elementsPromise: Promise<RscElementsPayload>;
   let htmlPromise: Promise<RscHtmlPayload>;
@@ -74,7 +86,9 @@ export const renderHtmlStream: RenderHtmlStream = async (
     // https://github.com/facebook/react/pull/31799#discussion_r1886166075
     // FIXME unlike the client, this does not adopt the payload, so it keeps
     // its reserved keys and unstable_isImmutableElement reads no etags from it
-    elementsPromise ??= createFromReadableStream<RscElementsPayload>(stream1);
+    elementsPromise ??= options.tee
+      ? (createFromTee(options.tee) as Promise<RscElementsPayload>)
+      : createFromReadableStream<RscElementsPayload>(stream1!);
     htmlPromise ??= createFromReadableStream<RscHtmlPayload>(rscHtmlStream);
     return (
       <INTERNAL_ServerRoot elementsPromise={elementsPromise}>

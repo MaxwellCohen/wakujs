@@ -42,13 +42,8 @@ declare module 'react-server-dom-webpack/server.edge' {
     temporaryReferences?: TemporaryReferenceSet | undefined;
     onError?: ((error: unknown) => string | undefined) | undefined;
     onPostpone?: ((reason: string) => void) | undefined;
-    htmlFirst?:
-      | boolean
-      | {
-          onRow?: (id: number, json: string) => void;
-          onValue?: (id: number, value: unknown) => void;
-        }
-      | undefined;
+    htmlFirst?: boolean | undefined;
+    tee?: unknown;
   };
 
   export function renderToReadableStream(
@@ -110,4 +105,9 @@ declare module 'react-server-dom-webpack/client.edge' {
     stream: ReadableStream,
     options?: Options,
   ): Promise<T>;
+}
+
+declare module '@vitejs/plugin-rsc/vendor/react-server-dom/client.edge' {
+  export function createTee(serverConsumerManifest: object): unknown;
+  export function createFromTee<T>(tee: unknown): PromiseLike<T>;
 }

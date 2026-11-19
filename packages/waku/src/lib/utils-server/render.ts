@@ -53,6 +53,8 @@ export function createRenderUtils({
     reportError(error);
   };
 
+  const teesByStream = new WeakMap<ReadableStream, unknown>();
+
   return {
     async renderRsc(elements, options) {
       validateRscElementIds(elements);
@@ -66,8 +68,11 @@ export function createRenderUtils({
         data[ETAGS_ID] = options.etags;
       }
       // enableFlightHTMLFirst: only the Flight render that feeds HTML SSR opts
-      // in (React's internal registry feeds in-process createFrom*). RSC-only
-      // responses (SPA nav) do not, so they carry full content.
+      // in, with a tee that SSR reads. RSC-only responses (SPA nav) do not, so
+      // they carry full content.
+      const tee = options?.unstable_htmlFirst
+        ? (await loadSsrEntryModule()).INTERNAL_createTee()
+        : undefined;
       const stream = renderWithWeakPromises(data, (model) =>
         renderToReadableStream(
           model,
@@ -75,7 +80,7 @@ export function createRenderUtils({
             temporaryReferences,
             onError,
             debugChannel: createDebugChannel?.(),
-            ...(options?.unstable_htmlFirst ? { htmlFirst: true } : {}),
+            ...(tee ? { htmlFirst: true, tee } : {}),
           },
           {
             onClientReference(metadata: {
@@ -88,6 +93,9 @@ export function createRenderUtils({
           },
         ),
       );
+      if (tee) {
+        teesByStream.set(stream, tee);
+      }
       return stream;
     },
     async renderHtml(elementsStream, html, options) {
@@ -96,6 +104,7 @@ export function createRenderUtils({
 
       const rscHtmlStream = renderToReadableStream(html, { onError });
       const htmlResult = await renderHtmlStream(elementsStream, rscHtmlStream, {
+        tee: teesByStream.get(elementsStream),
         rscPath: options.rscPath,
         formState: options.formState as never,
         nonce: options.nonce,

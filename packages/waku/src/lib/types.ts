@@ -15,9 +15,10 @@ export type RenderRsc = (
     etags?: Etags;
     unstable_clientModuleCallback?: (ids: string[]) => void;
     /**
-     * When true (HTML document render), opt in to HTML-first Flight with `htmlFirst: true`
-     * so React's in-process registry feeds SSR. When false/omitted (RSC
-     * navigation) nothing is stubbed, so the browser gets a full payload.
+     * When true (HTML document render), opt in to HTML-first Flight with
+     * `htmlFirst: true` and a Flight tee that `renderHtml` reads for SSR.
+     * When false/omitted (RSC navigation) nothing is stubbed, so the browser
+     * gets a full payload.
      */
     unstable_htmlFirst?: boolean;
   },
