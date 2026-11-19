@@ -1,12 +1,21 @@
 import { expect, test } from 'vitest';
 import { patchRsdwPlugin } from '../src/lib/vite-plugins/patch-rsdw.js';
 
-const runResolve = async (source: string, importer?: string) => {
+const runResolve = async (
+  source: string,
+  importer?: string,
+  environmentName = 'rsc',
+) => {
   const plugin = patchRsdwPlugin();
   if (typeof plugin.resolveId !== 'function') {
     throw new Error('Plugin resolveId is not defined');
   }
-  return plugin.resolveId.call({} as never, source, importer, {} as never);
+  return plugin.resolveId.call(
+    { environment: { name: environmentName } } as never,
+    source,
+    importer,
+    {} as never,
+  );
 };
 
 const runLoad = async (source: string, environmentName: string) => {
@@ -41,6 +50,9 @@ test('rewrites RSDW edge imports to Vite RSC wrappers', async () => {
       'react-server-dom-webpack/client.edge',
       '/tmp/node_modules/@vitejs/plugin-rsc/dist/react/rsc.js',
     ),
+  ).resolves.toBeUndefined();
+  await expect(
+    runResolve('react-server-dom-webpack/client.edge', '/tmp/app.ts', 'ssr'),
   ).resolves.toBeUndefined();
   await expect(
     runResolve('react-server-dom-webpack/server.edge', '/tmp/app.ts'),

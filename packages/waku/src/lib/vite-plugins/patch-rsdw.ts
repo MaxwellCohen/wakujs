@@ -17,8 +17,11 @@ export function patchRsdwPlugin(): Plugin {
       if (source === RSDW_CLIENT_ID) {
         return toVirtualId(source);
       }
+      // The ssr environment reads Flight tees from plugin-rsc's own copy of
+      // client.edge (createTee/createFromTee), so leave it unpatched there.
       if (
-        (source === RSDW_CLIENT_EDGE_ID || source === RSDW_SERVER_EDGE_ID) &&
+        ((source === RSDW_CLIENT_EDGE_ID && this.environment.name !== 'ssr') ||
+          source === RSDW_SERVER_EDGE_ID) &&
         !isVitePluginRscImporter(importer)
       ) {
         return toVirtualId(source);
