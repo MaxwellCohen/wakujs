@@ -55,6 +55,10 @@ type RenderHtmlStream = (
     debugId: string | undefined;
     onError: (e: unknown) => string | undefined;
     tee?: unknown;
+    // Settles the Flight render's `htmlFirst` thenable: `resolve` once Fizz is
+    // done (allReady) with no error, `reject` on any Fizz error, shell error or
+    // abort. The Flight bytes (`rscStream`) stay open until then.
+    htmlFirstSignal?: { resolve: () => void; reject: () => void } | undefined;
   },
 ) => Promise<{ stream: ReadableStream; status: number | undefined }>;
 
@@ -102,6 +106,13 @@ export const renderHtmlStream: RenderHtmlStream = async (
     createBootstrapScriptContent(getClientEntryUrl());
   let htmlStream: Awaited<ReturnType<typeof renderToReadableStream>>;
   let status: number | undefined;
+  const htmlFirstSignal = options.htmlFirstSignal;
+  const onHtmlError = (e: unknown) => {
+    // Any Fizz error (including aborts and client-render bailouts) means some
+    // boundary will not be fully server-rendered from the tee.
+    htmlFirstSignal?.reject();
+    return options.onError(e);
+  };
   try {
     htmlStream = await renderToReadableStream(<SsrRoot />, {
       bootstrapScriptContent:
@@ -112,11 +123,19 @@ export const renderHtmlStream: RenderHtmlStream = async (
         }) +
         bootstrapScriptContent +
         (options.extraScriptContent || ''),
-      onError: options.onError,
+      onError: onHtmlError,
       ...(options.nonce ? { nonce: options.nonce } : {}),
       ...(options.formState ? { formState: options.formState } : {}),
     });
+    if (htmlFirstSignal) {
+      // The error handler above rejects first, so this only wins when Fizz had
+      // no errors. A cancelled response aborts Fizz, which errors pending
+      // boundaries (and rejects allReady if it was not already settled).
+      htmlStream.allReady.then(htmlFirstSignal.resolve, htmlFirstSignal.reject);
+    }
   } catch (e) {
+    // The shell failed: the empty fallback below does not read the tee.
+    htmlFirstSignal?.reject();
     status = hasRenderCancellationDigest(e) ? undefined : 500;
     // SSR empty html and go full CSR on browser, which can revive RSC errors.
     const ssrErrorRoot = (

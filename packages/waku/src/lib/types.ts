@@ -16,7 +16,9 @@ export type RenderRsc = (
     unstable_clientModuleCallback?: (ids: string[]) => void;
     /**
      * When true (HTML document render), opt in to HTML-first Flight with
-     * `htmlFirst: true` and a Flight tee that `renderHtml` reads for SSR.
+     * a Flight tee that `renderHtml` reads for SSR, and an `htmlFirst` thenable
+     * that `renderHtml` settles when its HTML render is done (so `renderHtml`
+     * must be called with the returned stream).
      * When false/omitted (RSC navigation) nothing is stubbed, so the browser
      * gets a full payload.
      */

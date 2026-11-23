@@ -53,7 +53,12 @@ export function createRenderUtils({
     reportError(error);
   };
 
-  const teesByStream = new WeakMap<ReadableStream, unknown>();
+  // The Flight tee and the signal that tells React when the HTML render that
+  // reads it is done. React keeps the Flight bytes open until it settles.
+  const htmlFirstByStream = new WeakMap<
+    ReadableStream,
+    { tee: unknown; resolve: () => void; reject: () => void }
+  >();
 
   return {
     async renderRsc(elements, options) {
@@ -73,6 +78,23 @@ export function createRenderUtils({
       const tee = options?.unstable_htmlFirst
         ? (await loadSsrEntryModule()).INTERNAL_createTee()
         : undefined;
+      // HTML-first Flight keeps the byte stream open until this settles: it is
+      // resolved when the HTML render finishes and rejected if it errored or
+      // aborted, so React then writes the stubbed rows into the stream.
+      let htmlFirstSignal:
+        | { resolve: () => void; reject: () => void; promise: Promise<void> }
+        | undefined;
+      if (tee) {
+        let resolve!: () => void;
+        let reject!: () => void;
+        const promise = new Promise<void>((res, rej) => {
+          resolve = res;
+          reject = () => rej(new Error('HTML render did not complete'));
+        });
+        // React attaches its own handlers; never leave a rejection unhandled.
+        promise.catch(() => {});
+        htmlFirstSignal = { resolve, reject, promise };
+      }
       const stream = renderWithWeakPromises(data, (model) =>
         renderToReadableStream(
           model,
@@ -80,7 +102,9 @@ export function createRenderUtils({
             temporaryReferences,
             onError,
             debugChannel: createDebugChannel?.(),
-            ...(tee ? { htmlFirst: true, tee } : {}),
+            ...(tee && htmlFirstSignal
+              ? { htmlFirst: htmlFirstSignal.promise, tee }
+              : {}),
           },
           {
             onClientReference(metadata: {
@@ -93,25 +117,38 @@ export function createRenderUtils({
           },
         ),
       );
-      if (tee) {
-        teesByStream.set(stream, tee);
+      if (tee && htmlFirstSignal) {
+        htmlFirstByStream.set(stream, {
+          tee,
+          resolve: htmlFirstSignal.resolve,
+          reject: htmlFirstSignal.reject,
+        });
       }
       return stream;
     },
     async renderHtml(elementsStream, html, options) {
-      const { INTERNAL_renderHtmlStream: renderHtmlStream } =
-        await loadSsrEntryModule();
+      const htmlFirst = htmlFirstByStream.get(elementsStream);
+      let htmlResult;
+      try {
+        const { INTERNAL_renderHtmlStream: renderHtmlStream } =
+          await loadSsrEntryModule();
 
-      const rscHtmlStream = renderToReadableStream(html, { onError });
-      const htmlResult = await renderHtmlStream(elementsStream, rscHtmlStream, {
-        tee: teesByStream.get(elementsStream),
-        rscPath: options.rscPath,
-        formState: options.formState as never,
-        nonce: options.nonce,
-        extraScriptContent: options.unstable_extraScriptContent,
-        debugId,
-        onError,
-      });
+        const rscHtmlStream = renderToReadableStream(html, { onError });
+        htmlResult = await renderHtmlStream(elementsStream, rscHtmlStream, {
+          tee: htmlFirst?.tee,
+          htmlFirstSignal: htmlFirst,
+          rscPath: options.rscPath,
+          formState: options.formState as never,
+          nonce: options.nonce,
+          extraScriptContent: options.unstable_extraScriptContent,
+          debugId,
+          onError,
+        });
+      } catch (e) {
+        // No HTML render will read the tee, so let the Flight stream finish.
+        htmlFirst?.reject();
+        throw e;
+      }
       return new Response(htmlResult.stream, {
         status: htmlResult.status || options.status || 200,
         headers: { 'content-type': 'text/html; charset=utf-8' },

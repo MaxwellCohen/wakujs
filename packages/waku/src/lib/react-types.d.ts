@@ -42,7 +42,7 @@ declare module 'react-server-dom-webpack/server.edge' {
     temporaryReferences?: TemporaryReferenceSet | undefined;
     onError?: ((error: unknown) => string | undefined) | undefined;
     onPostpone?: ((reason: string) => void) | undefined;
-    htmlFirst?: boolean | undefined;
+    htmlFirst?: boolean | PromiseLike<void> | undefined;
     tee?: unknown;
   };
 
